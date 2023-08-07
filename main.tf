@@ -155,10 +155,10 @@ resource "aws_appautoscaling_target" "ecs_target" {
   resource_id        = "service/${var.deployment_name}-cluster/${aws_ecs_service.aws-ecs-service.name}"
   scalable_dimension = "ecs:service:DesiredCount"
   service_namespace  = "ecs"
-  role_arn           = aws_iam_role.role.arn
+  role_arn           = aws_iam_role.ExecutionRole.arn
 }
 
 resource "aws_iam_instance_profile" "ds_node_profile" {
   name = "${var.deployment_name}-DataSunrise-Node-Profile"
-  role = aws_iam_role.role.name
+  role = aws_iam_role.ExecutionRole.name
 }

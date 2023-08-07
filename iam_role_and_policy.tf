@@ -1,4 +1,4 @@
-resource "aws_iam_role" "role" {
+resource "aws_iam_role" "ExecutionRole" {
   name = "${var.deployment_name}-ecsTaskExecutionRole"
   path = "/"
 
@@ -15,6 +15,26 @@ resource "aws_iam_role" "role" {
       "Sid": ""
     }
   ]
+}
+EOF
+}
+
+resource "aws_iam_role" "ecs_task_role" {
+  name = "${var.deployment_name}-ecs-task-role"
+ 
+  assume_role_policy = <<EOF
+{
+ "Version": "2012-10-17",
+ "Statement": [
+   {
+     "Action": "sts:AssumeRole",
+     "Principal": {
+       "Service": "ecs-tasks.amazonaws.com"
+     },
+     "Effect": "Allow",
+     "Sid": ""
+   }
+ ]
 }
 EOF
 }
@@ -38,7 +58,9 @@ resource "aws_iam_policy" "policy" {
                 "ec2:DescribeSubnets",
                 "rds:DescribeDBInstances",
                 "rds:DescribeDBClusters",
-                "aws-marketplace:MeterUsage"
+                "aws-marketplace:MeterUsage",
+                "secretsmanager:GetSecretValue",
+                "logs:CreateLogStream"
             ],
             "Resource": "*"
         }
@@ -99,6 +121,7 @@ EOF
 resource "aws_iam_policy" "oracle_wallet_s3_access_policy" {
   name = "${var.deployment_name}-OracleWalletS3AccessPolicy"
   path = "/"
+  count = var.s3_bucket_name != "" ? 1 : 0
 
   policy = <<EOF
 {
@@ -120,34 +143,29 @@ resource "aws_iam_policy" "oracle_wallet_s3_access_policy" {
   EOF
 }
 
-resource "aws_iam_role_policy_attachment" "dsvm-role-attach" {
-  role       = aws_iam_role.role.name
-  policy_arn = aws_iam_policy.policy.arn
-}
-
 resource "aws_iam_role_policy_attachment" "dsecs-role-attach" {
-  role       = aws_iam_role.role.name
+  role       = aws_iam_role.ExecutionRole.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
 resource "aws_iam_role_policy_attachment" "ds_autoscaling_policy-attach" {
-  role       = aws_iam_role.role.name
+  role       = aws_iam_role.ExecutionRole.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceAutoscaleRole"
 }
 
 resource "aws_iam_role_policy_attachment" "dsvm-task-role-attach" {
-  role       = aws_iam_role.role.name
+  role       = aws_iam_role.ecs_task_role.name
   policy_arn = aws_iam_policy.policy.arn
 }
 
-
 resource "aws_iam_role_policy_attachment" "s3-role-attach" {
-  role       = aws_iam_role.role.name
+  role       = aws_iam_role.ecs_task_role.name
   policy_arn = aws_iam_policy.s3_access_policy[count.index].arn
   count      = var.s3_bucket_name != "" ? 1 : 0
 }
 
 resource "aws_iam_role_policy_attachment" "s3-oracle-wallet-role-attach" {
-  role       = aws_iam_role.role.name
-  policy_arn = aws_iam_policy.oracle_wallet_s3_access_policy.arn
+  role       = aws_iam_role.ecs_task_role.name
+  policy_arn = aws_iam_policy.oracle_wallet_s3_access_policy[count.index].arn
+  count      = var.s3_bucket_name != "" ? 1 : 0
 }

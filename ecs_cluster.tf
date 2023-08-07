@@ -11,10 +11,10 @@ resource "aws_ecs_cluster" "aws-ecs-cluster" {
 # Task Definition
 locals {
   fargate_mssql_dictionary = var.dictionary_db_type == "mssql" ? "true" : "false"
-  fargate_mssql_audit      = var.audit_db_type == "mssql" ? "true" : "false"
+  fargate_mssql_audit      = var.audit_db_type      == "mssql" ? "true" : "false"
   audit_db_address         = length(regexall("aurora-postgresql|aurora-mysql", var.audit_db_type)) != 0 ? "${join("", aws_rds_cluster.ds_audit_db_cluster.*.endpoint)}" : "${join("", aws_db_instance.audit_db.*.address)}"
   HourlyBillingLic         = "aT3Ma4BfGhCzDzhAerfmTq8yGS1Zwm4uLPio8Rv1CdDBhbwF0Lzwzh+aEyFaz+hoFnoqnwzDynZ8L4QRH1WDrg==:0:{\"CustomerName\":\"aws\",\"AWSMetering\":\"true\"}"
-  ds_license_key           = var.ds_license_type == "BYOL" ? var.ds_license_key : local.HourlyBillingLic
+  ds_license_key           = var.ds_license_type    == "BYOL" ? var.ds_license_key : local.HourlyBillingLic
 }
 
 resource "aws_ecs_task_definition" "aws-ecs-task" {
@@ -70,7 +70,7 @@ resource "aws_ecs_task_definition" "aws-ecs-task" {
           "options": {
             "awslogs-group": "${aws_cloudwatch_log_group.log-group.id}",
             "awslogs-region": "${data.aws_region.current.name}",
-            "awslogs-stream-prefix": "${var.deployment_name}"
+            "awslogs-stream-prefix": "ecs"
           }
         },
       "portMappings": [
@@ -90,8 +90,8 @@ resource "aws_ecs_task_definition" "aws-ecs-task" {
   #   operating_system_family = "LINUX"
   #   cpu_architecture        = "X86_64"
   # }
-  execution_role_arn       = aws_iam_role.role.arn
-  task_role_arn            = aws_iam_role.role.arn
+  execution_role_arn       = aws_iam_role.ExecutionRole.arn
+  task_role_arn            = aws_iam_role.ecs_task_role.arn
 
   tags = {
     Name        = "${var.deployment_name}-ecs-td"

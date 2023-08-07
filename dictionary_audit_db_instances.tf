@@ -1,5 +1,4 @@
 # Create Database Subnets
-
 resource "aws_db_subnet_group" "ds_db_subnet_group" {
   name        = "${var.deployment_name}-db-subnet-group"
   description = "RDS database subnet group for DataSunrise configuration storage"
@@ -8,31 +7,19 @@ resource "aws_db_subnet_group" "ds_db_subnet_group" {
 }
 
 # Create Database Instances 
-
 locals {
   rds_dictionary_type = var.dictionary_db_type == "postgresql" ? "postgres" : var.dictionary_db_type
-  rds_audit_type      = var.audit_db_type == "postgresql" ? "postgres" : var.audit_db_type
-  dict_db_name = {
-    postgres = "${var.dictionary_db_name}",
-    mssql    = null,
-    mysql    = "${var.dictionary_db_name}"
-  }
-  audit_db_name = {
-    postgres          = "${var.audit_db_name}",
-    mssql             = null,
-    mysql             = "${var.audit_db_name}",
-    aurora-mysql      = "${var.audit_db_name}",
-    aurora-postgresql = "${var.audit_db_name}"
-  }
+  rds_audit_type      = var.audit_db_type      == "postgresql" ? "postgres" : var.audit_db_type
+
   dictionary_rds_server_engine = {
     postgres = "postgres",
     mssql    = "sqlserver-se",
     mysql    = "mysql"
   }
   dictionary_rds_engine_version = {
-    postgres = "14", 
-    mssql    = "14.00", 
-    mysql    = "5.7"
+    postgres = "15",
+    mssql    = "15.00",
+    mysql    = "8.0"
   }
   audit_rds_server_engine = {
     postgres          = "postgres",
@@ -42,24 +29,43 @@ locals {
     aurora-postgresql = "aurora-postgresql"
   }
   audit_rds_engine_version = {
-    postgres          = "14", 
-    mssql             = "14.00", 
-    mysql             = "5.7",
-    aurora-mysql      = "5.7",
-    aurora-postgresql = "13"
+    postgres          = "15",
+    mssql             = "15.00",
+    mysql             = "8.0",
+    aurora-mysql      = "8.0",
+    aurora-postgresql = "15"
   }
+  db_license_model = {
+    postgres          = "postgresql-license",
+    mssql             = "license-included",
+    mysql             = "general-public-license",
+    aurora-mysql      = null,
+    aurora-postgresql = null
+  }
+  db_parameter_group_family = {
+    postgres          = "postgres15",
+    mssql             = "sqlserver-se-15.0",
+    mysql             = "mysql8.0",
+    aurora-mysql      = "aurora-mysql8.0",
+    aurora-postgresql = "aurora-postgresql15"
+  }
+}
+
+data "aws_secretsmanager_secret_version" "db_password" {
+  count     = can(regex("^arn:aws:secretsmanager:", var.db_password)) ? 1 : 0
+  secret_id = var.db_password
 }
 
 resource "aws_db_instance" "dictionary_db" {
   identifier             = "${var.deployment_name}-dictionary"
-  db_name                = lookup(local.dict_db_name, local.rds_dictionary_type)
+  db_name                = var.dictionary_db_type != "mssql" ? var.dictionary_db_name : null
   engine                 = lookup(local.dictionary_rds_server_engine, local.rds_dictionary_type)
   engine_version         = lookup(local.dictionary_rds_engine_version, local.rds_dictionary_type)
   instance_class         = var.dictionary_db_class
   license_model          = lookup(local.db_license_model, local.rds_dictionary_type)
   port                   = var.dictionary_db_port
   username               = var.db_username
-  password               = var.db_password
+  password               = can(regex("^arn:aws:secretsmanager:", var.db_password)) ? jsondecode(nonsensitive(data.aws_secretsmanager_secret_version.db_password[0].secret_string))["password"] : var.db_password
   multi_az               = var.multi_az_dictionary
   allocated_storage      = var.dictionary_db_storage_size
   vpc_security_group_ids = [aws_security_group.ds_config_sg.id]
@@ -69,23 +75,23 @@ resource "aws_db_instance" "dictionary_db" {
   skip_final_snapshot    = true
   parameter_group_name   = aws_db_parameter_group.ds_parameter_group_dictionary.name
 
-  depends_on = [aws_db_subnet_group.ds_db_subnet_group, aws_security_group.ds_config_sg, aws_db_parameter_group.ds_parameter_group_dictionary]
-}
-
-locals {
-  db_audit_aurora = length(regexall("aurora-postgresql|aurora-mysql", local.rds_audit_type)) == 0 ? 1 : 0
+  depends_on = [
+    aws_db_subnet_group.ds_db_subnet_group,
+    aws_security_group.ds_config_sg,
+    aws_db_parameter_group.ds_parameter_group_dictionary
+  ]
 }
 
 resource "aws_db_instance" "audit_db" {
-  count                  = local.db_audit_aurora
+  count                  = length(regexall("aurora-postgresql|aurora-mysql", local.rds_audit_type)) == 0 ? 1 : 0
   identifier             = "${var.deployment_name}-audit"
-  db_name                = lookup(local.audit_db_name, local.rds_audit_type)
+  db_name                = var.audit_db_type != "mssql" ? var.audit_db_name : null
   engine                 = lookup(local.audit_rds_server_engine, local.rds_audit_type)
   engine_version         = lookup(local.audit_rds_engine_version, local.rds_audit_type)
   instance_class         = var.audit_db_class
   license_model          = lookup(local.db_license_model, local.rds_audit_type)
   username               = var.db_username
-  password               = var.db_password
+  password               = can(regex("^arn:aws:secretsmanager:", var.db_password)) ? jsondecode(nonsensitive(data.aws_secretsmanager_secret_version.db_password[0].secret_string))["password"] : var.db_password
   multi_az               = var.multi_az_dictionary
   allocated_storage      = var.audit_db_storage_size
   vpc_security_group_ids = [aws_security_group.ds_config_sg.id]
@@ -95,24 +101,24 @@ resource "aws_db_instance" "audit_db" {
   skip_final_snapshot    = true
   parameter_group_name   = aws_db_parameter_group.ds_parameter_group_audit[count.index].name
 
-  depends_on = [aws_db_subnet_group.ds_db_subnet_group, aws_security_group.ds_config_sg, aws_db_parameter_group.ds_parameter_group_audit]
+  depends_on = [
+    aws_db_subnet_group.ds_db_subnet_group,
+    aws_security_group.ds_config_sg,
+    aws_db_parameter_group.ds_parameter_group_audit
+  ]
 }
 
 # Create Aurora Cluster And Instance
-locals {
-  cluster_audit_aurora =  length(regexall("aurora-postgresql|aurora-mysql", local.rds_audit_type)) != 0 ? 1 : 0
-}
-
 resource "aws_rds_cluster" "ds_audit_db_cluster" {
-  count                           = local.cluster_audit_aurora
+  count                           = length(regexall("aurora-postgresql|aurora-mysql", var.audit_db_type)) != 0 ? 1 : 0
   cluster_identifier              = "${var.deployment_name}-ds-audit-cluster"
   engine                          = lookup(local.audit_rds_server_engine, local.rds_audit_type)
   engine_version                  = lookup(local.audit_rds_engine_version, local.rds_audit_type)
-  database_name                   = lookup(local.audit_db_name, local.rds_audit_type)
+  database_name                   = var.audit_db_name
   master_username                 = var.db_username
-  master_password                 = var.db_password
+  master_password                 = can(regex("^arn:aws:secretsmanager:", var.db_password)) ? jsondecode(nonsensitive(data.aws_secretsmanager_secret_version.db_password[0].secret_string))["password"] : var.db_password
   port                            = var.audit_db_port
-  storage_encrypted               = true 
+  storage_encrypted               = true
   skip_final_snapshot             = true
   db_subnet_group_name            = aws_db_subnet_group.ds_db_subnet_group.name
   vpc_security_group_ids          = [aws_security_group.ds_config_sg.id]
@@ -120,7 +126,7 @@ resource "aws_rds_cluster" "ds_audit_db_cluster" {
 }
 
 resource "aws_rds_cluster_instance" "ds_audit_db_cluster_node" {
-  count                = local.cluster_audit_aurora
+  count                = length(regexall("aurora-postgresql|aurora-mysql", var.audit_db_type)) != 0 ? 1 : 0
   identifier           = "${var.deployment_name}-ds-audit-node"
   cluster_identifier   = "${aws_rds_cluster.ds_audit_db_cluster[0].cluster_identifier}"
   instance_class       = var.audit_db_class
@@ -128,28 +134,14 @@ resource "aws_rds_cluster_instance" "ds_audit_db_cluster_node" {
   engine_version       = aws_rds_cluster.ds_audit_db_cluster[count.index].engine_version
   db_subnet_group_name = aws_db_subnet_group.ds_db_subnet_group.name
 
-  depends_on = [aws_db_subnet_group.ds_db_subnet_group, aws_security_group.ds_config_sg, aws_rds_cluster_parameter_group.ds_parameter_group_cluster]
+  depends_on = [
+    aws_db_subnet_group.ds_db_subnet_group,
+    aws_security_group.ds_config_sg,
+    aws_rds_cluster_parameter_group.ds_parameter_group_cluster
+  ]
 }
 
 # Create Parameter Group
-
-locals {
-  db_license_model = {
-    postgres          = "postgresql-license",
-    mssql             = "license-included",
-    mysql             = "general-public-license",
-    aurora-mysql      = null,
-    aurora-postgresql = null
-  }
-  db_parameter_group_family = {
-    postgres          = "postgres14",
-    mssql             = "sqlserver-se-14.0",
-    mysql             = "mysql5.7",
-    aurora-mysql      = "aurora-mysql5.7",
-    aurora-postgresql = "aurora-postgresql13"
-  }
-}
-
 locals {
   parameters     = {
     mssql    = [{
@@ -202,13 +194,8 @@ locals {
   }
 }
 
-locals {
-  ds_parameter_group_name_dictionary = "${var.deployment_name}-parameter-group-dict-${local.rds_dictionary_type}"
-  ds_parameter_group_name_audit      = "${var.deployment_name}-parameter-group-audit-${local.rds_audit_type}"
-}
-
 resource "aws_db_parameter_group" "ds_parameter_group_dictionary" {
-  name        = local.ds_parameter_group_name_dictionary
+  name        = "${var.deployment_name}-parameter-group-dict-${var.dictionary_db_type}"
   family      = lookup(local.db_parameter_group_family, local.rds_dictionary_type)
   description = "DS Parameter Group Configured By Terraform"
 
@@ -227,8 +214,8 @@ resource "aws_db_parameter_group" "ds_parameter_group_dictionary" {
 }
 
 resource "aws_db_parameter_group" "ds_parameter_group_audit" {
-  count       = local.db_audit_aurora
-  name        = local.ds_parameter_group_name_audit
+  count       = length(regexall("aurora-postgresql|aurora-mysql", var.audit_db_type)) == 0 ? 1 : 0
+  name        = "${var.deployment_name}-parameter-group-audit-${var.audit_db_type}"
   family      = lookup(local.db_parameter_group_family, local.rds_audit_type)
   description = "DS Parameter Group Configured By Terraform"
 
@@ -247,8 +234,8 @@ resource "aws_db_parameter_group" "ds_parameter_group_audit" {
 }
 
 resource "aws_rds_cluster_parameter_group" "ds_parameter_group_cluster" {
-  count       = local.cluster_audit_aurora
-  name        = local.ds_parameter_group_name_audit
+  count       = length(regexall("aurora-postgresql|aurora-mysql", var.audit_db_type)) != 0 ? 1 : 0
+  name        = "${var.deployment_name}-parameter-group-audit-${var.audit_db_type}"
   family      = lookup(local.db_parameter_group_family, local.rds_audit_type)
   description = "DS Parameter Group Configured By Terraform"
 

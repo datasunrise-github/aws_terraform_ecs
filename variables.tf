@@ -65,12 +65,11 @@ variable "container_memory" {
 }
 
 variable "ds_backend_port" {
-  description = "the same as container_port"
+  description = "the same ContainerPort"
   default     = "443"
 }
 
 variable "container_port" {
-  type        = number
   default     = 443
 }
 
@@ -208,7 +207,10 @@ variable "db_username" {
 
 variable "db_password" {
   description = "The database administrator account password."
-  #The password must contain at least 8 characters, lower and upper case, numbers and special characters.
+    #The database administrator account password.
+    #You can also specify the arn of the secret to retrieve the password from AWS Secrets Manager.
+    #For example: arn:aws:secretsmanager:us-east-1:123456789012:secret:mysecret-aBcD12.
+  type        = string
   default     = "xxxxxxxxx"
 }
 
@@ -220,8 +222,8 @@ variable "db_storage_type" {
 variable "db_subnet_ids" {
   type        = list(string)
   description = "Dictionary and Audit subnets. Must be a part of mentioned VPC. Please be sure that you select at least two subnets."
-  #IN CASE YOU NEED TO ADD MORE SUBNET IDS, JUST ADD IT AS NEW ELEMENT OF THE LIST BELOW USING COMMA TO SEPARATE THEM
-  #IF NUMBER OF SUBNETS IS MORE THEN DEFAULT YOU HAVE TO ADD THE CORRESPONDING AMOUNT OF VARIABLES IN MAIN.TF
+    #IN CASE YOU NEED TO ADD MORE SUBNET IDS, JUST ADD IT AS NEW ELEMENT OF THE LIST BELOW USING COMMA TO SEPARATE THEM
+    #IF NUMBER OF SUBNETS IS MORE THEN DEFAULT YOU HAVE TO ADD THE CORRESPONDING AMOUNT OF VARIABLES IN MAIN.TF
   default     = ["xxxxxxxxx", "xxxxxxxxx"]
 }
 
