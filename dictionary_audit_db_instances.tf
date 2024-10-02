@@ -90,6 +90,7 @@ resource "aws_db_instance" "audit_db" {
   engine_version         = lookup(local.audit_rds_engine_version, local.rds_audit_type)
   instance_class         = var.audit_db_class
   license_model          = lookup(local.db_license_model, local.rds_audit_type)
+  port                   = var.audit_db_port
   username               = var.db_username
   password               = can(regex("^arn:aws:secretsmanager:", var.db_password)) ? jsondecode(nonsensitive(data.aws_secretsmanager_secret_version.db_password[0].secret_string))["password"] : var.db_password
   multi_az               = var.multi_az_dictionary
