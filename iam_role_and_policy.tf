@@ -60,7 +60,9 @@ resource "aws_iam_policy" "policy" {
                 "rds:DescribeDBClusters",
                 "aws-marketplace:MeterUsage",
                 "secretsmanager:GetSecretValue",
-                "logs:CreateLogStream"
+                "logs:CreateLogStream",
+                "events:PutEvents",
+                "events:PutRule"
             ],
             "Resource": "*"
         }
