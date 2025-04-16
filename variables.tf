@@ -45,23 +45,33 @@ variable "certificate" {
 }
 
 variable "container_cpu" {
-  description   = "# 256 (.25 vCPU) - Available memory values: 0.5GB, 1GB, 2GB"
-                  # 512 (.5 vCPU) - Available memory values: 1GB, 2GB, 3GB, 4GB
-                  # 1024 (1 vCPU) - Available memory values: 2GB, 3GB, 4GB, 5GB, 6GB, 7GB, 8GB
-                  # 2048 (2 vCPU) - Available memory values: Between 4GB and 16GB in 1GB increments
-                  # 4096 (4 vCPU) - Available memory values: Between 8GB and 30GB in 1GB increments
-  # AllowedValues = ["512","1024","2048","4096"]
-  type = number
-  default       = 2048
+  description = "# Minimum value: 2048 (2 vCPU) - Supported values: "
+                # 2048 (2 vCPU) - Supported memory values: from 4GB to 16GB in 1GB increments"
+                # 4096 (4 vCPU) - Supported memory values: from 8GB to 30GB in 1GB increments"
+                # 8192 (8 vCPU) - Supported memory values: from 16GB to 60GB in 4GB increments"
+                # 16384 (16 vCPU) - Supported memory values: from 32GB to 120GB in 8GB increments"
+  type    = number
+  default = 2048
+  
+  validation {
+    condition     = var.container_cpu >= 2048
+    error_message = "Minimum requirements: 2 vCPU (2048 CPU). Please provide a value >= 2048."
+  }
 }
 
 variable "container_memory" {
-  description = "# 0.5GB, 1GB, 2GB - Available cpu values: 256 (.25 vCPU)"
-                 # 1GB, 2GB, 3GB, 4GB - Available cpu values: 512 (.5 vCPU)
-                 # 2GB, 3GB, 4GB, 5GB, 6GB, 7GB, 8GB - Available cpu values: 1024 (1 vCPU)
-                 # Between 4GB and 16GB in 1GB increments - Available cpu values: 2048 (2 vCPU)
-                 # Between 8GB and 30GB in 1GB increments - Available cpu values: 4096 (4 vCPU)
-  default     = 4096
+  description = "# Minimum value: 4096 (4GB) - Supported values: "
+                # From 4GB to 16GB in 1GB increments for 2048 (2 vCPU)"
+                # From 8GB to 30GB in 1GB increments for 4096 (4 vCPU)"
+                # From 16GB to 60GB in 4GB increments for 8192 (8 vCPU)"
+                # From 32GB to 120GB in 8GB increments for 16384 (16 vCPU)"
+  type    = number
+  default = 4096
+  
+  validation {
+    condition     = var.container_memory >= 4096
+    error_message = "Minimum requirements: 4GB RAM. Please provide a value >= 4096."
+  }
 }
 
 variable "ds_backend_port" {
